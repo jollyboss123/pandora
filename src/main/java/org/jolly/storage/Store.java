@@ -8,9 +8,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.util.Comparator;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
 public class Store {
     private static final Logger log = LogManager.getLogger(Store.class);
@@ -44,6 +46,18 @@ public class Store {
             int n = copy(in, out);
             log.info("read {} bytes from disk", n);
             return new ByteArrayInputStream(out.toByteArray());
+        }
+    }
+
+    public void delete(String key) throws IOException {
+        PathKey pathKey = transformPath.apply(key);
+
+        if (Files.exists(pathKey.getParent())) {
+            try (Stream<Path> fileStream = Files.walk(pathKey.getParent())) {
+                fileStream.sorted(Comparator.reverseOrder())
+                        .map(Path::toFile)
+                        .forEach(File::delete);
+            }
         }
     }
 

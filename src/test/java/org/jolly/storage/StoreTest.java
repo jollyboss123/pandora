@@ -28,6 +28,31 @@ class StoreTest {
         } catch (IOException e) {
             fail();
         }
+
+        try {
+            s.delete(key);
+        } catch (IOException e) {
+            fail();
+        }
     }
 
+    @Test
+    void delete() {
+        Store s = Store.create(new CASTransformPath());
+        String key = "somepicture";
+        byte[] data = "random bytes".getBytes();
+
+        ByteArrayInputStream in = new ByteArrayInputStream(data);
+        try {
+            s.writeStream(key, in);
+        } catch (IOException e) {
+            fail();
+        }
+
+        try {
+            s.delete(key);
+        } catch (IOException e) {
+            fail();
+        }
+    }
 }
