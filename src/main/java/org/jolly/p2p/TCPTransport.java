@@ -7,74 +7,84 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.SocketAddress;
 import java.util.Arrays;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.UnaryOperator;
 
 public class TCPTransport implements Transport {
     private static final Logger log = LogManager.getLogger(TCPTransport.class);
 
     private final int port;
     private final Handshake handshake;
-    private final Decoder<Message> decoder;
-    private final ReentrantReadWriteLock reentrantReadWriteLock = new ReentrantReadWriteLock();
-    private final Map<SocketAddress, Peer> peers;
+    private final Decoder<RPC> decoder;
+    private final UnaryOperator<Peer> onPeer;
+    private final ArrayBlockingQueue<RPC> rpcChannel;
 
     private final AtomicBoolean running = new AtomicBoolean(true);
 
-    private TCPTransport(int port, Handshake handshake, Decoder<Message> decoder, Map<SocketAddress, Peer> peers) {
+    private TCPTransport(int port, Handshake handshake, Decoder<RPC> decoder, UnaryOperator<Peer> onPeer, ArrayBlockingQueue<RPC> rpcChannel) {
         this.port = port;
         this.handshake = handshake;
         this.decoder = decoder;
-        this.peers = peers;
+        this.onPeer = onPeer;
+        this.rpcChannel = rpcChannel;
     }
 
     private TCPTransport(int port) {
-        this(port, new NOPHandshake(), new DefaultDecoder(), new ConcurrentHashMap<>());
+        this(port, new NOPHandshake(), new DefaultDecoder(), null, new ArrayBlockingQueue<>(1024));
     }
 
     public static Transport create(int port) {
         return new TCPTransport(port);
     }
 
-    public static Transport create(int port, Handshake handshake, Decoder<Message> decoder) {
-        return new TCPTransport(port, handshake, decoder, new ConcurrentHashMap<>());
+    public static Transport create(int port, Handshake handshake, Decoder<RPC> decoder, UnaryOperator<Peer> onPeer, ArrayBlockingQueue<RPC> rpcChannel) {
+        return new TCPTransport(port, handshake, decoder, onPeer, rpcChannel);
     }
 
     @Override
     public void listen() {
-        try (ServerSocket serverSocket = new ServerSocket(this.port)) {
-            accept(serverSocket);
+        try (ServerSocket serverSocket = new ServerSocket(this.port);
+             ExecutorService executor = Executors.newCachedThreadPool()) {
+
+            accept(serverSocket, executor);
         } catch (IOException e) {
             log.error("failed to start server");
             System.exit(1);
         }
     }
 
-    private void accept(ServerSocket serverSocket) {
+    @Override
+    public BlockingQueue<RPC> consume() {
+        return this.rpcChannel;
+    }
+
+    private void accept(ServerSocket serverSocket, ExecutorService executor) throws IOException {
         while (running.get()) {
             log.info("waiting for new tcp client connection");
-            try (Socket socket = serverSocket.accept()) {
+            Socket socket = serverSocket.accept();
+            executor.submit(() -> {
+                try {
+                    handleConn(socket);
+                    log.info("tcp client connected on: {}", socket.getPort());
 
-                handleConn(socket);
-                log.info("tcp client connected on: {}", socket.getPort());
-
-            } catch (IOException e) {
-                log.error("tcp accept error");
-                throw new IllegalStateException(e);
-            } catch (InvalidHandshakeException e) {
-                log.error("tcp handshake error");
-                throw new IllegalStateException(e);
-            } catch (ClassNotFoundException e) {
-                log.error("tcp decode input stream error");
-                throw new IllegalStateException(e);
-            }
+                } catch (IOException e) {
+                    log.error("tcp accept error");
+                    throw new IllegalStateException(e);
+                } catch (InvalidHandshakeException e) {
+                    log.error("tcp handshake error");
+                    throw new IllegalStateException(e);
+                } catch (ClassNotFoundException e) {
+                    log.error("tcp decode input stream error");
+                    throw new IllegalStateException(e);
+                }
+            });
         }
     }
 
@@ -83,6 +93,10 @@ public class TCPTransport implements Transport {
         log.info("tcp peer created: {}", peer);
 
         handshake.perform(peer);
+
+        if (onPeer != null) {
+            onPeer.apply(peer);
+        }
 
         try (InputStream in = socket.getInputStream()) {
             ByteArrayOutputStream buffer = new ByteArrayOutputStream();
@@ -96,9 +110,10 @@ public class TCPTransport implements Transport {
                 int eolIndex;
                 while ((eolIndex = indexOf(data, (byte) '\n')) != -1) {
                     byte[] messageBytes = Arrays.copyOf(data, eolIndex);
-                    Message msg = decoder.decode(new ByteArrayInputStream(messageBytes));
-                    Message finalMsg = new Message(msg.getPayload(), socket.getRemoteSocketAddress());
+                    RPC msg = decoder.decode(new ByteArrayInputStream(messageBytes));
+                    RPC finalMsg = new RPC(msg.getPayload(), socket.getRemoteSocketAddress());
                     log.info("tcp received message: {}", finalMsg);
+                    rpcChannel.put(finalMsg);
 
                     // move the remaining bytes to the beginning of the buffer
                     buffer.reset();
@@ -106,6 +121,9 @@ public class TCPTransport implements Transport {
                     data = buffer.toByteArray();
                 }
             }
+        } catch (InterruptedException e) {
+            log.error("rpc channel put error for peer: [{}]", peer, e);
+            Thread.currentThread().interrupt();
         }
     }
 
