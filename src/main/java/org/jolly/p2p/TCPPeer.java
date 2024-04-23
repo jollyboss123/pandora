@@ -21,11 +21,11 @@ public class TCPPeer implements Peer {
         this.outbound = outbound;
     }
 
-    public static Peer createOutbound(Socket conn) {
+    public static Peer ofOutbound(Socket conn) {
         return new TCPPeer(conn, true);
     }
 
-    public static Peer createInbound(Socket conn) {
+    public static Peer ofInbound(Socket conn) {
         return new TCPPeer(conn, false);
     }
 

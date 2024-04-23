@@ -15,42 +15,31 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.UnaryOperator;
 
 public class TCPTransport implements Transport {
     private static final Logger log = LogManager.getLogger(TCPTransport.class);
 
-    private final int port;
-    private final Handshake handshake;
-    private final Decoder<RPC> decoder;
-    private final UnaryOperator<Peer> onPeer;
+    private final TCPTransportConfig cfg;
     private final ArrayBlockingQueue<RPC> rpcChannel;
 
     private final AtomicBoolean running = new AtomicBoolean(true);
 
-    private TCPTransport(int port, Handshake handshake, Decoder<RPC> decoder, UnaryOperator<Peer> onPeer, ArrayBlockingQueue<RPC> rpcChannel) {
-        this.port = port;
-        this.handshake = handshake;
-        this.decoder = decoder;
-        this.onPeer = onPeer;
+    private TCPTransport(TCPTransportConfig cfg, ArrayBlockingQueue<RPC> rpcChannel) {
+        this.cfg = cfg;
         this.rpcChannel = rpcChannel;
     }
 
-    private TCPTransport(int port) {
-        this(port, new NOPHandshake(), new DefaultDecoder(), null, new ArrayBlockingQueue<>(1024));
+    private TCPTransport(TCPTransportConfig cfg) {
+        this(cfg, new ArrayBlockingQueue<>(1024));
     }
 
-    public static Transport create(int port) {
-        return new TCPTransport(port);
-    }
-
-    public static Transport create(int port, Handshake handshake, Decoder<RPC> decoder, UnaryOperator<Peer> onPeer, ArrayBlockingQueue<RPC> rpcChannel) {
-        return new TCPTransport(port, handshake, decoder, onPeer, rpcChannel);
+    public static Transport of(TCPTransportConfig cfg) {
+        return new TCPTransport(cfg);
     }
 
     @Override
     public void listen() {
-        try (ServerSocket serverSocket = new ServerSocket(this.port);
+        try (ServerSocket serverSocket = new ServerSocket(this.cfg.getPort());
              ExecutorService executor = Executors.newCachedThreadPool()) {
 
             accept(serverSocket, executor);
@@ -89,13 +78,13 @@ public class TCPTransport implements Transport {
     }
 
     private void handleConn(Socket socket) throws InvalidHandshakeException, IOException, ClassNotFoundException {
-        TCPPeer peer = (TCPPeer) TCPPeer.createOutbound(socket);
+        TCPPeer peer = (TCPPeer) TCPPeer.ofOutbound(socket);
         log.info("tcp peer created: {}", peer);
 
-        handshake.perform(peer);
+        cfg.getHandshake().perform(peer);
 
-        if (onPeer != null) {
-            onPeer.apply(peer);
+        if (cfg.getOnPeer() != null) {
+            cfg.getOnPeer().apply(peer);
         }
 
         try (InputStream in = socket.getInputStream()) {
@@ -110,7 +99,7 @@ public class TCPTransport implements Transport {
                 int eolIndex;
                 while ((eolIndex = indexOf(data, (byte) '\n')) != -1) {
                     byte[] messageBytes = Arrays.copyOf(data, eolIndex);
-                    RPC msg = decoder.decode(new ByteArrayInputStream(messageBytes));
+                    RPC msg = cfg.getDecoder().decode(new ByteArrayInputStream(messageBytes));
                     RPC finalMsg = new RPC(msg.getPayload(), socket.getRemoteSocketAddress());
                     log.info("tcp received message: {}", finalMsg);
                     rpcChannel.put(finalMsg);
@@ -136,7 +125,7 @@ public class TCPTransport implements Transport {
         return -1;
     }
 
-    int getPort() {
-        return port;
+    public TCPTransportConfig getCfg() {
+        return cfg;
     }
 }

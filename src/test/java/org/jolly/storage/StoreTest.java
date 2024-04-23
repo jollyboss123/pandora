@@ -1,5 +1,7 @@
 package org.jolly.storage;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -9,10 +11,25 @@ import java.io.InputStream;
 import static org.junit.jupiter.api.Assertions.*;
 
 class StoreTest {
+    private Store s;
+
+    @BeforeEach
+    void setUp() {
+        StoreConfig cfg = StoreConfig.of(null, new CASTransformPath());
+        s = Store.of(cfg);
+    }
+
+    @AfterEach
+    void tearDown() {
+        try {
+            s.clear();
+        } catch (IOException e) {
+            fail();
+        }
+    }
 
     @Test
     void storeAndRetrieve() {
-        Store s = Store.create(new CASTransformPath());
         String key = "somepicture";
         byte[] data = "random bytes".getBytes();
 
@@ -28,17 +45,10 @@ class StoreTest {
         } catch (IOException e) {
             fail();
         }
-
-        try {
-            s.delete(key);
-        } catch (IOException e) {
-            fail();
-        }
     }
 
     @Test
     void delete() {
-        Store s = Store.create(new CASTransformPath());
         String key = "somepicture";
         byte[] data = "random bytes".getBytes();
 

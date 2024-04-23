@@ -2,7 +2,7 @@ package org.jolly.storage;
 
 import java.util.function.Function;
 
-public class DefaultTransformPath implements Function<String, PathKey> {
+public class DefaultTransformPath implements TransformPath {
 
     @Override
     public PathKey apply(String s) {

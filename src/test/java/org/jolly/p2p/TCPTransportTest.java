@@ -9,9 +9,10 @@ class TCPTransportTest {
     @Test
     void connectTCP() {
         int port = 4444;
-        TCPTransport t = (TCPTransport) TCPTransport.create(port);
+        TCPTransportConfig cfg = TCPTransportConfig.of(port);
+        TCPTransport t = (TCPTransport) TCPTransport.of(cfg);
 
-        assertEquals(port, t.getPort());
+        assertEquals(port, t.getCfg().getPort());
         assertDoesNotThrow(t::listen);
     }
 }

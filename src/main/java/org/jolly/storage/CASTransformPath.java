@@ -8,13 +8,12 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
-import java.util.function.Function;
 
 // CASTransformPath transforms a key into a structured path suitable for Content-Addressable Storage (CAS).
 // It computes the SHA-1 hash of the key, converts it to hexadecimal, partitions it into blocks of characters,
 // and constructs a path using these blocks, separated by slashes ("/").
 // The resulting path structure helps in distributing and accessing data in a content-addressable manner.
-public class CASTransformPath implements Function<String, PathKey> {
+public class CASTransformPath implements TransformPath {
 
     private static final Logger log = LogManager.getLogger(CASTransformPath.class);
     private static final String ALGORITHM = "SHA-1";

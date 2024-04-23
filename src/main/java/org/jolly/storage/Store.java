@@ -7,48 +7,26 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Comparator;
 import java.util.Objects;
-import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Stream;
 
 public class Store {
     private static final Logger log = LogManager.getLogger(Store.class);
 
-    private final Function<String, PathKey> transformPath;
-    private final Set<PosixFilePermission> filePermissions;
-    private static final String DEFAULT_PERMISSIONS = "rwxr-xr-x";
-    // root is the root directory for the system containing stored directories/files.
-    private final String root;
-    private static final String DEFAULT_ROOT = "default";
+    private final StoreConfig cfg;
 
-    private Store(Function<String, PathKey> transformPath, Set<PosixFilePermission> filePermissions, String root) {
-        this.transformPath = transformPath;
-        this.filePermissions = filePermissions;
-        this.root = root;
+    private Store(StoreConfig cfg) {
+        this.cfg = cfg;
     }
 
-    private Store(Function<String, PathKey> transformPath) {
-        this(transformPath, PosixFilePermissions.fromString(DEFAULT_PERMISSIONS), DEFAULT_ROOT);
+    public static Store of(StoreConfig cfg) {
+        return new Store(cfg);
     }
 
-    private Store() {
-        this(new DefaultTransformPath(), PosixFilePermissions.fromString(DEFAULT_PERMISSIONS), DEFAULT_ROOT);
-    }
-
-    public static Store create() {
-        return new Store();
-    }
-
-    public static Store create(Function<String, PathKey> transformPath) {
-        return new Store(transformPath);
-    }
-
-    public static Store create(Function<String, PathKey> transformPath, String root) {
-        return new Store(transformPath, PosixFilePermissions.fromString(DEFAULT_PERMISSIONS), root);
+    public static Store of() {
+        return new Store(StoreConfig.of());
     }
 
     public InputStream read(String key) throws IOException {
@@ -61,45 +39,31 @@ public class Store {
     }
 
     public void delete(String key) throws IOException {
-        PathKey pathKey = transformPath.apply(key);
+        PathKey pathKey = cfg.getTransformPath().apply(key);
         Path parent = prependRoot(pathKey.getParent());
 
-        if (Files.exists(parent)) {
-            try (Stream<Path> fileStream = Files.walk(parent)) {
-                fileStream.sorted(Comparator.reverseOrder())
-                        .forEach(path -> {
-                            try {
-                                if (!Files.deleteIfExists(path)) {
-                                    log.warn("delete failed, file: {} does not exist", path);
-                                }
-                            } catch (IOException e) {
-                                log.error("file delete error for: {}", path, e);
-                                throw new RuntimeException(e);
-                            }
-                        });
-            }
-        }
-        log.info("deleted: {} from disk", pathKey.getFullPath());
+        log.info("deleting key: {} from disk", key);
+        recursiveDelete(parent);
     }
 
     public boolean has(String key) {
-        PathKey pathKey = transformPath.apply(key);
+        PathKey pathKey = cfg.getTransformPath().apply(key);
         Path fullPath = prependRoot(pathKey.getFullPath());
         return Files.exists(fullPath);
     }
 
     InputStream readStream(String key) throws IOException {
-        PathKey pathKey = transformPath.apply(key);
+        PathKey pathKey = cfg.getTransformPath().apply(key);
         Path fullPath = prependRoot(pathKey.getFullPath());
         return Files.newInputStream(fullPath);
     }
 
     void writeStream(String key, InputStream in) throws IOException {
-        PathKey pathKey = transformPath.apply(key);
+        PathKey pathKey = cfg.getTransformPath().apply(key);
         Path fullPath = prependRoot(pathKey.getFullPath());
 
         if (!Files.exists(fullPath.getParent())) {
-            Files.createDirectories(fullPath.getParent(), PosixFilePermissions.asFileAttribute(filePermissions));
+            Files.createDirectories(fullPath.getParent(), PosixFilePermissions.asFileAttribute(cfg.getFilePermissions()));
             log.info("created directory: {}", fullPath.getParent());
         }
         if (!Files.exists(fullPath)) {
@@ -128,7 +92,35 @@ public class Store {
         return count;
     }
 
+    void clear() throws IOException {
+        log.info("deleting root: {} from disk", cfg.getRoot());
+        recursiveDelete(Paths.get(cfg.getRoot()));
+    }
+
+    private static void recursiveDelete(Path path) throws IOException {
+        if (Files.exists(path)) {
+            try (Stream<Path> fileStream = Files.walk(path)) {
+                fileStream.sorted(Comparator.reverseOrder())
+                        .forEach(p -> {
+                            try {
+                                if (!Files.deleteIfExists(p)) {
+                                    log.warn("delete failed, file: {} does not exist", p);
+                                }
+                            } catch (IOException e) {
+                                log.error("file delete error for: {}", p, e);
+                                throw new RuntimeException(e);
+                            }
+                        });
+            }
+        }
+        log.info("deleted: {} from disk", path);
+    }
+
     private Path prependRoot(Path path) {
-        return Paths.get(root, path.toString());
+        return Paths.get(cfg.getRoot(), path.toString());
+    }
+
+    public StoreConfig getCfg() {
+        return cfg;
     }
 }
