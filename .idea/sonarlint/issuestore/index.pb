@@ -52,3 +52,7 @@ b
 2src/main/java/org/jolly/storage/TransformPath.java,e/5/e5f1b6c87b81c42b9dda3da9644f1c75fa18c9c7
 c
 3src/main/java/org/jolly/p2p/TCPTransportConfig.java,0/c/0c632a5d21980f9ab24c79888719f32db41866cd
+^
+.src/main/java/org/jolly/server/FileServer.java,9/7/979d762cdf8b8a7bea0b432a2932b916f0f056bf
+d
+4src/main/java/org/jolly/server/FileServerConfig.java,d/c/dc96c63e9a5bb80b6717331686bb9ee36bc04059

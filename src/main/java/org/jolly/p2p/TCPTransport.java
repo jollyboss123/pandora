@@ -22,7 +22,7 @@ public class TCPTransport implements Transport {
     private final TCPTransportConfig cfg;
     private final ArrayBlockingQueue<RPC> rpcChannel;
 
-    private final AtomicBoolean running = new AtomicBoolean(true);
+    private volatile boolean running = true;
 
     private TCPTransport(TCPTransportConfig cfg, ArrayBlockingQueue<RPC> rpcChannel) {
         this.cfg = cfg;
@@ -55,7 +55,7 @@ public class TCPTransport implements Transport {
     }
 
     private void accept(ServerSocket serverSocket, ExecutorService executor) throws IOException {
-        while (running.get()) {
+        while (running) {
             log.info("waiting for new tcp client connection");
             Socket socket = serverSocket.accept();
             executor.submit(() -> {
@@ -127,5 +127,10 @@ public class TCPTransport implements Transport {
 
     public TCPTransportConfig getCfg() {
         return cfg;
+    }
+
+    @Override
+    public void close() throws Exception {
+        running = false;
     }
 }
