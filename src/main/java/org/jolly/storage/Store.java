@@ -55,10 +55,19 @@ public class Store {
         if (Files.exists(pathKey.getParent())) {
             try (Stream<Path> fileStream = Files.walk(pathKey.getParent())) {
                 fileStream.sorted(Comparator.reverseOrder())
-                        .map(Path::toFile)
-                        .forEach(File::delete);
+                        .forEach(path -> {
+                            try {
+                                if (!Files.deleteIfExists(path)) {
+                                    log.warn("delete failed, file: {} does not exist", path);
+                                }
+                            } catch (IOException e) {
+                                log.error("file delete error for: {}", path, e);
+                                throw new RuntimeException(e);
+                            }
+                        });
             }
         }
+        log.info("deleted: {} from disk", pathKey.getFullPath());
     }
 
     InputStream readStream(String key) throws IOException {
@@ -71,7 +80,7 @@ public class Store {
         Path fullPath = pathKey.getFullPath();
 
         if (!Files.exists(fullPath.getParent())) {
-            Files.createDirectories(pathKey.getFullPath().getParent(), PosixFilePermissions.asFileAttribute(filePermissions));
+            Files.createDirectories(fullPath.getParent(), PosixFilePermissions.asFileAttribute(filePermissions));
             log.info("created directory: {}", fullPath.getParent());
         }
         if (!Files.exists(fullPath)) {
