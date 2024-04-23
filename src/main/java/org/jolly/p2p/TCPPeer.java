@@ -29,6 +29,10 @@ public class TCPPeer implements Peer {
         return new TCPPeer(conn, false);
     }
 
+    public static Peer of(Socket conn, boolean outbound) {
+        return new TCPPeer(conn, outbound);
+    }
+
     @Override
     public String toString() {
         return "TCPPeer{conn=%s, outbound=%s}".formatted(conn.getRemoteSocketAddress().toString(), Boolean.toString(outbound));

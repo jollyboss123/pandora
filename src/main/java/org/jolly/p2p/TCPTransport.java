@@ -21,12 +21,14 @@ public class TCPTransport implements Transport {
 
     private final TCPTransportConfig cfg;
     private final ArrayBlockingQueue<RPC> rpcChannel;
+    private final ExecutorService executor;
 
     private volatile boolean running = true;
 
     private TCPTransport(TCPTransportConfig cfg, ArrayBlockingQueue<RPC> rpcChannel) {
         this.cfg = cfg;
         this.rpcChannel = rpcChannel;
+        this.executor = Executors.newCachedThreadPool();
     }
 
     private TCPTransport(TCPTransportConfig cfg) {
@@ -39,10 +41,9 @@ public class TCPTransport implements Transport {
 
     @Override
     public void listen() {
-        try (ServerSocket serverSocket = new ServerSocket(this.cfg.getPort());
-             ExecutorService executor = Executors.newCachedThreadPool()) {
+        try (ServerSocket serverSocket = new ServerSocket(this.cfg.getPort())) {
 
-            accept(serverSocket, executor);
+            accept(serverSocket);
         } catch (IOException e) {
             log.error("failed to start server");
             System.exit(1);
@@ -50,35 +51,56 @@ public class TCPTransport implements Transport {
     }
 
     @Override
+    public void dial(int port) throws IOException {
+        Socket socket = new Socket((String) null, port);
+        executor.submit(() -> {
+            try {
+                log.info("tcp dial client connected on: {}", socket.getPort());
+                handleConn(socket, true);
+
+            } catch (IOException e) {
+                log.error("tcp dial accept error on: {}", socket.getPort(), e);
+                throw new IllegalStateException(e);
+            } catch (InvalidHandshakeException e) {
+                log.error("tcp dial handshake error on: {}", socket.getPort(), e);
+                throw new IllegalStateException(e);
+            } catch (ClassNotFoundException e) {
+                log.error("tcp dial decode input stream error on: {}", socket.getPort(), e);
+                throw new IllegalStateException(e);
+            }
+        });
+    }
+
+    @Override
     public BlockingQueue<RPC> consume() {
         return this.rpcChannel;
     }
 
-    private void accept(ServerSocket serverSocket, ExecutorService executor) throws IOException {
+    private void accept(ServerSocket serverSocket) throws IOException {
         while (running) {
             log.info("waiting for new tcp client connection");
             Socket socket = serverSocket.accept();
             executor.submit(() -> {
                 try {
-                    handleConn(socket);
                     log.info("tcp client connected on: {}", socket.getPort());
+                    handleConn(socket, false);
 
                 } catch (IOException e) {
-                    log.error("tcp accept error");
+                    log.error("tcp accept error on: {}", socket.getPort(), e);
                     throw new IllegalStateException(e);
                 } catch (InvalidHandshakeException e) {
-                    log.error("tcp handshake error");
+                    log.error("tcp accept handshake error on: {}", socket.getPort(), e);
                     throw new IllegalStateException(e);
                 } catch (ClassNotFoundException e) {
-                    log.error("tcp decode input stream error");
+                    log.error("tcp accept decode input stream error on: {}", socket.getPort(), e);
                     throw new IllegalStateException(e);
                 }
             });
         }
     }
 
-    private void handleConn(Socket socket) throws InvalidHandshakeException, IOException, ClassNotFoundException {
-        TCPPeer peer = (TCPPeer) TCPPeer.ofOutbound(socket);
+    private void handleConn(Socket socket, boolean outbound) throws InvalidHandshakeException, IOException, ClassNotFoundException {
+        TCPPeer peer = (TCPPeer) TCPPeer.of(socket, outbound);
         log.info("tcp peer created: {}", peer);
 
         cfg.getHandshake().perform(peer);
@@ -130,7 +152,8 @@ public class TCPTransport implements Transport {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
+        log.info("quitting tcp transport");
         running = false;
     }
 }
