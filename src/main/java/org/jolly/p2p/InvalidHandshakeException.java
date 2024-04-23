@@ -13,4 +13,12 @@ public class InvalidHandshakeException extends Exception {
     public InvalidHandshakeException(String msg) {
         super(msg);
     }
+
+    public InvalidHandshakeException(String msg, Throwable cause) {
+        super(msg, cause);
+    }
+
+    public InvalidHandshakeException(Throwable cause) {
+        super(cause);
+    }
 }
