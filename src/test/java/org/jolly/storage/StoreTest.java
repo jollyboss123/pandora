@@ -49,10 +49,14 @@ class StoreTest {
             fail();
         }
 
+        assertTrue(s.has(key));
+
         try {
             s.delete(key);
         } catch (IOException e) {
             fail();
         }
+
+        assertFalse(s.has(key));
     }
 }
