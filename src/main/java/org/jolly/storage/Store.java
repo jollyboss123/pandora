@@ -2,6 +2,7 @@ package org.jolly.storage;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.jolly.io.IOUtils;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -9,7 +10,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Comparator;
-import java.util.Objects;
 import java.util.stream.Stream;
 
 public class Store {
@@ -32,10 +32,14 @@ public class Store {
     public InputStream read(String key) throws IOException {
         try (InputStream in = readStream(key)) {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
-            int n = copy(in, out);
+            int n = IOUtils.copy(in, out);
             log.info("read {} bytes from disk", n);
             return new ByteArrayInputStream(out.toByteArray());
         }
+    }
+
+    public void write(String key, InputStream in) throws IOException {
+        writeStream(key, in);
     }
 
     public void delete(String key) throws IOException {
@@ -72,24 +76,9 @@ public class Store {
         }
 
         try (OutputStream out = new FileOutputStream(fullPath.toFile())) {
-            int n = copy(in, out);
+            int n = IOUtils.copy(in, out);
             log.info("written {} bytes to disk: {}", n, fullPath);
         }
-    }
-
-    private static int copy(InputStream in, OutputStream out) throws IOException {
-        Objects.requireNonNull(in);
-        Objects.requireNonNull(out);
-
-        byte[] buf = new byte[8192];
-        int count = 0;
-        int n;
-
-        while ((n = in.read(buf)) != -1) {
-            out.write(buf, 0, n);
-            count += n;
-        }
-        return count;
     }
 
     void clear() throws IOException {

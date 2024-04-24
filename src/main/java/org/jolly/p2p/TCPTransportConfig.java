@@ -1,5 +1,8 @@
 package org.jolly.p2p;
 
+import org.jolly.p2p.encoding.Decoder;
+import org.jolly.p2p.encoding.DefaultRPCDecoder;
+
 public class TCPTransportConfig implements TransportConfig {
     private final int port;
     private final Handshake handshake;
@@ -8,7 +11,7 @@ public class TCPTransportConfig implements TransportConfig {
 
     private static final int DEFAULT_PORT = 3000;
     private static final Handshake DEFAULT_HANDSHAKE = new NOPHandshake();
-    private static final Decoder<RPC> DEFAULT_DECODER = new DefaultDecoder();
+    private static final Decoder<RPC> DEFAULT_DECODER = new DefaultRPCDecoder();
 
     private TCPTransportConfig(int port, Handshake handshake, Decoder<RPC> decoder, PeerHandler peerHandler) {
         if (port == 0) {
@@ -55,7 +58,7 @@ public class TCPTransportConfig implements TransportConfig {
         return decoder;
     }
 
-    public PeerHandler getOnPeer() {
+    public PeerHandler getPeerHandler() {
         return peerHandler;
     }
 

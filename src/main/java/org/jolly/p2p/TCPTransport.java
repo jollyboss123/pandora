@@ -3,13 +3,11 @@ package org.jolly.p2p;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.Arrays;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
@@ -63,9 +61,6 @@ public class TCPTransport implements Transport {
             } catch (InvalidHandshakeException e) {
                 log.error("tcp dial handshake error on: {}", socket.getPort(), e);
                 throw new IllegalStateException(e);
-            } catch (ClassNotFoundException e) {
-                log.error("tcp dial decode input stream error on: {}", socket.getPort(), e);
-                throw new IllegalStateException(e);
             }
         });
     }
@@ -90,22 +85,19 @@ public class TCPTransport implements Transport {
                 } catch (InvalidHandshakeException e) {
                     log.error("tcp accept handshake error on: {}", socket.getPort(), e);
                     throw new IllegalStateException(e);
-                } catch (ClassNotFoundException e) {
-                    log.error("tcp accept decode input stream error on: {}", socket.getPort(), e);
-                    throw new IllegalStateException(e);
                 }
             });
         }
     }
 
-    private void handleConn(Socket socket, boolean outbound) throws InvalidHandshakeException, IOException, ClassNotFoundException {
+    private void handleConn(Socket socket, boolean outbound) throws InvalidHandshakeException, IOException {
         TCPPeer peer = (TCPPeer) TCPPeer.of(socket, outbound);
         log.info("tcp peer created: {}", peer);
 
         cfg.getHandshake().perform(peer);
 
-        if (cfg.getOnPeer() != null) {
-            cfg.getOnPeer().onPeer(peer);
+        if (cfg.getPeerHandler() != null) {
+            cfg.getPeerHandler().onPeer(peer);
         }
 
         try (InputStream in = socket.getInputStream()) {
@@ -113,37 +105,20 @@ public class TCPTransport implements Transport {
             byte[] buf = new byte[1024];
             int n;
 
-            while ((n = in.read(buf)) != -1) {
+            for (;;) {
+                n = in.read(buf);
                 buffer.write(buf, 0, n);
                 byte[] data = buffer.toByteArray();
 
-                int eolIndex;
-                while ((eolIndex = indexOf(data, (byte) '\n')) != -1) {
-                    byte[] messageBytes = Arrays.copyOf(data, eolIndex);
-                    RPC msg = cfg.getDecoder().decode(new ByteArrayInputStream(messageBytes));
-                    RPC finalMsg = new RPC(msg.getPayload(), socket.getRemoteSocketAddress());
-                    log.info("tcp received message: {}", finalMsg);
-                    rpcChannel.put(finalMsg);
-
-                    // move the remaining bytes to the beginning of the buffer
-                    buffer.reset();
-                    buffer.write(data, eolIndex + 1, data.length - eolIndex - 1);
-                    data = buffer.toByteArray();
-                }
+                RPC msg = cfg.getDecoder().decode(data);
+                RPC finalMsg = new RPC(msg.getPayload(), socket.getRemoteSocketAddress());
+                log.info("tcp received message: {}", finalMsg);
+                rpcChannel.put(finalMsg);
             }
         } catch (InterruptedException e) {
             log.error("rpc channel put error for peer: [{}]", peer, e);
             Thread.currentThread().interrupt();
         }
-    }
-
-    private static int indexOf(byte[] array, byte target) {
-        for (int i = 0; i < array.length; i++) {
-            if (array[i] == target) {
-                return i;
-            }
-        }
-        return -1;
     }
 
     @Override

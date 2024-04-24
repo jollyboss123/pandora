@@ -8,6 +8,7 @@ import org.jolly.server.FileServer;
 import org.jolly.server.FileServerConfig;
 import org.jolly.storage.CASTransformPath;
 
+import java.io.ByteArrayInputStream;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -16,13 +17,11 @@ public class Pandora {
     private static final Logger log = LogManager.getLogger(Pandora.class);
 
     public static void main(String[] args) {
-        TCPTransportConfig cfg = TCPTransportConfig.of(3000);
-        TCPTransport t = (TCPTransport) TCPTransport.of(cfg);
-        FileServerConfig fileServerConfig = FileServerConfig.of(t, "testing", new CASTransformPath(), new int[]{4000, 3000});
-
-        try (FileServer fs = FileServer.of(fileServerConfig);
+        try (FileServer fs1 = make(3000, new int[]{});
+             FileServer fs2 = make(4000, new int[]{3000});
             ExecutorService executor = Executors.newCachedThreadPool()) {
-            executor.submit(fs::start);
+            executor.submit(fs1::start);
+            executor.submit(fs2::start);
 
             CountDownLatch latch = new CountDownLatch(1);
 
@@ -36,6 +35,8 @@ public class Pandora {
                 }
             });
 
+            ByteArrayInputStream in = new ByteArrayInputStream("big data file".getBytes());
+            fs1.store("privatedata", in);
 //            Thread.sleep(5000);
 //            fs.stop();
         } catch (Exception e) {
@@ -43,5 +44,12 @@ public class Pandora {
             Thread.currentThread().interrupt();
             System.exit(1);
         }
+    }
+
+    static FileServer make(int port, int[] nodes) {
+        TCPTransportConfig tcpTransportConfig = TCPTransportConfig.of(port);
+        TCPTransport t = (TCPTransport) TCPTransport.of(tcpTransportConfig);
+        FileServerConfig fileServerConfig = FileServerConfig.of(t, "%d_network".formatted(port), new CASTransformPath(), nodes);
+        return FileServer.of(fileServerConfig);
     }
 }

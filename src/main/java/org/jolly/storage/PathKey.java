@@ -13,10 +13,10 @@ public class PathKey {
     private final String filename;
 
     public PathKey(String pathName, String filename) {
-        Objects.requireNonNull(pathName);
-        Objects.requireNonNull(filename);
-        requireNonEmpty(pathName);
-        requireNonEmpty(filename);
+        Objects.requireNonNull(pathName, "pathName");
+        Objects.requireNonNull(filename, "fileName");
+        requireNonEmpty(pathName, "pathName");
+        requireNonEmpty(filename, "filename");
 
         this.pathName = pathName;
         this.filename = filename;
@@ -36,14 +36,14 @@ public class PathKey {
 
     public Path getParent() {
         String parent = pathName.split("/")[0];
-        requireNonEmpty(parent);
+        requireNonEmpty(parent, "parent");
         return Paths.get(parent);
     }
 
-    private static void requireNonEmpty(String obj) {
-        if (obj.isEmpty() || obj.isBlank()) {
+    private static void requireNonEmpty(String str, String msg) {
+        if (str.isEmpty() || str.isBlank()) {
             log.error("should not be empty or blank");
-            throw new IllegalArgumentException("should not be empty or blank");
+            throw new IllegalArgumentException("%s should not be empty or blank".formatted(msg));
         }
     }
 }

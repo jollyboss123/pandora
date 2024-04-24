@@ -14,7 +14,7 @@ public class FileServerConfig {
     private final int[] bootstrapNodes;
 
     private FileServerConfig(String storageRoot, TransformPath transformPath, Transport transport, int[] bootstrapNodes) {
-        Objects.requireNonNull(transport);
+        Objects.requireNonNull(transport, "transport");
         this.storageRoot = storageRoot;
         this.transformPath = transformPath;
         this.transport = transport;

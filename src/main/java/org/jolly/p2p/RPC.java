@@ -1,5 +1,8 @@
 package org.jolly.p2p;
 
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.Serial;
 import java.io.Serializable;
 import java.net.SocketAddress;
 import java.util.Arrays;
@@ -9,7 +12,18 @@ import java.util.Arrays;
  * nodes in the network.
  */
 public class RPC implements Serializable {
+    @Serial
+    private static final long serialVersionUID = -44735281384796586L;
+
+    /**
+     * Payload. Must be non-null.
+     * @serial
+     */
     private final byte[] payload;
+    /**
+     * From. Must be non-null.
+     * @serial
+     */
     private final SocketAddress from;
 
     public RPC(byte[] payload, SocketAddress from) {
@@ -29,5 +43,10 @@ public class RPC implements Serializable {
     @Override
     public String toString() {
         return "RPC{payload=%s, from=%s".formatted(Arrays.toString(payload), from != null ? from.toString() : null);
+    }
+
+    @Serial
+    private void readObject(ObjectInputStream s) throws IOException, ClassNotFoundException {
+        s.defaultReadObject();
     }
 }
