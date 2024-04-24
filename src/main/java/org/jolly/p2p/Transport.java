@@ -8,6 +8,7 @@ import java.util.concurrent.BlockingQueue;
  * This can be in the form of TCP, UDP, etc.
  */
 public interface Transport extends AutoCloseable {
+    TransportConfig getCfg();
     void listen();
     void dial(int port) throws IOException;
     BlockingQueue<RPC> consume();

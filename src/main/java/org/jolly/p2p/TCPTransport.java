@@ -14,7 +14,6 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 public class TCPTransport implements Transport {
     private static final Logger log = LogManager.getLogger(TCPTransport.class);
@@ -106,7 +105,7 @@ public class TCPTransport implements Transport {
         cfg.getHandshake().perform(peer);
 
         if (cfg.getOnPeer() != null) {
-            cfg.getOnPeer().apply(peer);
+            cfg.getOnPeer().onPeer(peer);
         }
 
         try (InputStream in = socket.getInputStream()) {
@@ -147,6 +146,7 @@ public class TCPTransport implements Transport {
         return -1;
     }
 
+    @Override
     public TCPTransportConfig getCfg() {
         return cfg;
     }

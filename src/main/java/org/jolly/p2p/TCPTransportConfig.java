@@ -1,18 +1,16 @@
 package org.jolly.p2p;
 
-import java.util.function.UnaryOperator;
-
-public class TCPTransportConfig {
+public class TCPTransportConfig implements TransportConfig {
     private final int port;
     private final Handshake handshake;
     private final Decoder<RPC> decoder;
-    private final UnaryOperator<Peer> onPeer;
+    private PeerHandler peerHandler;
 
     private static final int DEFAULT_PORT = 3000;
     private static final Handshake DEFAULT_HANDSHAKE = new NOPHandshake();
     private static final Decoder<RPC> DEFAULT_DECODER = new DefaultDecoder();
 
-    private TCPTransportConfig(int port, Handshake handshake, Decoder<RPC> decoder, UnaryOperator<Peer> onPeer) {
+    private TCPTransportConfig(int port, Handshake handshake, Decoder<RPC> decoder, PeerHandler peerHandler) {
         if (port == 0) {
             port = DEFAULT_PORT;
         }
@@ -26,7 +24,7 @@ public class TCPTransportConfig {
         this.port = port;
         this.handshake = handshake;
         this.decoder = decoder;
-        this.onPeer = onPeer;
+        this.peerHandler = peerHandler;
     }
 
     public static TCPTransportConfig of() {
@@ -41,8 +39,8 @@ public class TCPTransportConfig {
         return new TCPTransportConfig(port, handshake, decoder, null);
     }
 
-    public static TCPTransportConfig of(int port, Handshake handshake, Decoder<RPC> decoder, UnaryOperator<Peer> onPeer) {
-        return new TCPTransportConfig(port, handshake, decoder, onPeer);
+    public static TCPTransportConfig of(int port, Handshake handshake, Decoder<RPC> decoder, PeerHandler peerHandler) {
+        return new TCPTransportConfig(port, handshake, decoder, peerHandler);
     }
 
     public int getPort() {
@@ -57,7 +55,12 @@ public class TCPTransportConfig {
         return decoder;
     }
 
-    public UnaryOperator<Peer> getOnPeer() {
-        return onPeer;
+    public PeerHandler getOnPeer() {
+        return peerHandler;
+    }
+
+    @Override
+    public void setOnPeer(PeerHandler peerHandler) {
+        this.peerHandler = peerHandler;
     }
 }

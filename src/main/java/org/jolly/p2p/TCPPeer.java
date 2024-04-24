@@ -1,6 +1,8 @@
 package org.jolly.p2p;
 
+import java.io.IOException;
 import java.net.Socket;
+import java.net.SocketAddress;
 
 /**
  * TCPPeer represents the remote node over a TCP established connection.
@@ -31,6 +33,16 @@ public class TCPPeer implements Peer {
 
     public static Peer of(Socket conn, boolean outbound) {
         return new TCPPeer(conn, outbound);
+    }
+
+    @Override
+    public SocketAddress getRemoteAddress() {
+        return conn.getRemoteSocketAddress();
+    }
+
+    @Override
+    public void send(byte[] data) throws IOException {
+        conn.getOutputStream().write(data);
     }
 
     @Override
