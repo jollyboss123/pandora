@@ -60,6 +60,7 @@ public class FileServer implements AutoCloseable, PeerHandler {
 
         store.write(key, tee);
 
+        buf.write(0x2);
         Payload p = new Payload(key, buf.toByteArray());
         broadcast(p);
     }
@@ -98,19 +99,13 @@ public class FileServer implements AutoCloseable, PeerHandler {
 
     private void listen() {
         log.info("waiting for transport message");
-        try {
-            while (running && !Thread.currentThread().isInterrupted()) {
-                RPC rpc = cfg.getRPCChannel().take();
-                log.info("file server received message: {}", rpc);
-
-                ObjectDecoder<Payload> decoder = new ObjectDecoder<>();
-                Payload p = decoder.decode(rpc.getPayload());
-                log.info("received payload: {}", p);
-            }
-        } catch (InterruptedException e) {
-            log.error("file server listen interrupted", e);
-            Thread.currentThread().interrupt();
-        }
+        cfg.getRPCChannel().stream()
+                .peek(rpc -> log.info("file server received message: {}", rpc))
+                .forEach(rpc -> {
+                    ObjectDecoder<Payload> decoder = new ObjectDecoder<>();
+                    Payload p = decoder.decode(rpc.getPayload());
+                    log.info("received payload: {}", p);
+                });
     }
 
     @Override

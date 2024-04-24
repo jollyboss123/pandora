@@ -1,5 +1,7 @@
 package org.jolly.p2p;
 
+import org.jolly.InfiniteBlockingQueue;
+
 import java.io.IOException;
 import java.util.concurrent.BlockingQueue;
 
@@ -11,5 +13,5 @@ public interface Transport extends AutoCloseable {
     TransportConfig getCfg();
     void listen();
     void dial(int port) throws IOException;
-    BlockingQueue<RPC> consume();
+    InfiniteBlockingQueue<RPC> consume();
 }

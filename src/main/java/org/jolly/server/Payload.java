@@ -1,4 +1,4 @@
-package org.jolly.p2p;
+package org.jolly.server;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;

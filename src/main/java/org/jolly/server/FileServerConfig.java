@@ -1,5 +1,6 @@
 package org.jolly.server;
 
+import org.jolly.InfiniteBlockingQueue;
 import org.jolly.p2p.RPC;
 import org.jolly.p2p.Transport;
 import org.jolly.storage.TransformPath;
@@ -45,7 +46,7 @@ public class FileServerConfig {
         return transport;
     }
 
-    public BlockingQueue<RPC> getRPCChannel() {
+    public InfiniteBlockingQueue<RPC> getRPCChannel() {
         return transport.consume();
     }
 

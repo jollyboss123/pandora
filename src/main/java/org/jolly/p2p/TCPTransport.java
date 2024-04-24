@@ -2,31 +2,35 @@ package org.jolly.p2p;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.jolly.ByteArrayBuilder;
+import org.jolly.InfiniteBlockingQueue;
 
+import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.*;
 
 public class TCPTransport implements Transport {
     private static final Logger log = LogManager.getLogger(TCPTransport.class);
 
     private final TCPTransportConfig cfg;
-    private final ArrayBlockingQueue<RPC> rpcChannel;
+    private final InfiniteBlockingQueue<RPC> rpcChannel;
     private final ExecutorService executor;
 
     private volatile boolean running = true;
 
-    private TCPTransport(TCPTransportConfig cfg, ArrayBlockingQueue<RPC> rpcChannel) {
+    private TCPTransport(TCPTransportConfig cfg, InfiniteBlockingQueue<RPC> rpcChannel) {
         this.cfg = cfg;
         this.rpcChannel = rpcChannel;
         this.executor = Executors.newCachedThreadPool();
     }
 
     private TCPTransport(TCPTransportConfig cfg) {
-        this(cfg, new ArrayBlockingQueue<>(1024));
+        this(cfg, new InfiniteBlockingQueue<>(1024));
     }
 
     public static Transport of(TCPTransportConfig cfg) {
@@ -63,7 +67,7 @@ public class TCPTransport implements Transport {
     }
 
     @Override
-    public BlockingQueue<RPC> consume() {
+    public InfiniteBlockingQueue<RPC> consume() {
         return this.rpcChannel;
     }
 
@@ -97,9 +101,9 @@ public class TCPTransport implements Transport {
             cfg.getPeerHandler().onPeer(peer);
         }
 
-        try (InputStream in = socket.getInputStream()) {
+        try (InputStream in = new BufferedInputStream(socket.getInputStream())) {
             ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-            byte[] buf = new byte[1024];
+            byte[] buf = new byte[10];
 
             for (int n; (n = in.read(buf)) != -1; ) {
                 buffer.write(buf, 0, n);
@@ -109,6 +113,8 @@ public class TCPTransport implements Transport {
                 RPC finalMsg = new RPC(msg.getPayload(), socket.getRemoteSocketAddress());
                 log.info("tcp received message: {}", finalMsg);
                 rpcChannel.put(finalMsg);
+
+                buffer.reset();
             }
         } catch (InterruptedException e) {
             log.error("rpc channel put error for peer: [{}]", peer, e);
@@ -122,8 +128,9 @@ public class TCPTransport implements Transport {
     }
 
     @Override
-    public void close() {
+    public void close() throws InterruptedException {
         log.info("quitting tcp transport");
         running = false;
+        rpcChannel.close();
     }
 }
