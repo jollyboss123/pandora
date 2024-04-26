@@ -127,7 +127,7 @@ public class FileServer implements AutoCloseable {
         log.info(marker, "store file msg: {}", msg);
 
         try {
-            store.write(msg.getKey(), new ByteArrayInputStream(msg.getData()));
+            store.write(msg.getKey(), new ByteArrayInputStream(msg.getData(), 0, msg.getSize()));
         } catch (IOException e) {
             //TODO: improve
             throw new RuntimeException(e);
