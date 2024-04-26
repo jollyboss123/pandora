@@ -109,10 +109,6 @@ public class TCPTransport implements Transport {
         log.info("peer [{}] message received: {}", peer, msg);
         try {
             msgChan.put(msg);
-            if (msg.getType().equals("stor")) {
-                RPC next = peer.receive(cfg.getDecoder());
-                msgChan.put(next);
-            }
         } catch (InterruptedException ignored) {
             log.error("msg channel put error for peer: [{}]", peer, ignored);
         }

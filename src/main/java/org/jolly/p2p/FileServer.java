@@ -59,11 +59,10 @@ public class FileServer implements AutoCloseable {
         TeeInputStream tee = TeeInputStream.of(in, buf);
         int size = store.write(key, tee);
 
-        MessageStoreFile payload = MessageStoreFile.of(key, size);
+        MessageStoreFile payload = MessageStoreFile.of(key, size, buf.toByteArray());
         ObjectEncoder<MessageStoreFile> encoder = new ObjectEncoder<>();
         byte[] encodedPayload = encoder.encode(payload);
-//        broadcast(RPC.of("stor", encodedPayload, null));
-        broadcast(RPC.of("stop", buf.toByteArray(), null));
+        broadcast(RPC.of(MessageType.STORE.getName(), encodedPayload, null));
 
         //TODO: fix this
         try {
@@ -71,8 +70,6 @@ public class FileServer implements AutoCloseable {
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
-
-//        broadcast(RPC.of("stop", buf.toByteArray(), null));
     }
 
     private void bootstrapNetwork() {
@@ -108,16 +105,25 @@ public class FileServer implements AutoCloseable {
                 .peek(rpc -> log.info("message received: {}", rpc))
                 .forEach(rpc -> {
                     log.info("do something here with: {}", rpc);
-//                    ObjectDecoder<MessageStoreFile> decoder = new ObjectDecoder<>();
-//                    MessageStoreFile msg = decoder.decode(rpc.getPayloadBytes());
-//                    log.info("store file msg: {}", msg);
 
-                    log.info("here");
+                    MessageType type = MessageType.from(rpc.getType());
+                    switch (type) {
+                        case STORE -> {
+                            ObjectDecoder<MessageStoreFile> decoder = new ObjectDecoder<>();
+                            MessageStoreFile msg = decoder.decode(rpc.getPayloadBytes());
+                            log.info("store file msg: {}", msg);
 
-                    try {
-                        store.write("stor", new ByteArrayInputStream(rpc.getPayloadBytes()));
-                    } catch (IOException e) {
-                        throw new RuntimeException(e);
+                            try {
+                                store.write(msg.getKey(), new ByteArrayInputStream(msg.getData()));
+                            } catch (IOException e) {
+                                //TODO: improve
+                                throw new RuntimeException(e);
+                            }
+                        }
+                        case FETCH -> {
+                            //TODO:
+                        }
+                        case null, default -> log.warn("unsupported message type: {}", rpc.getType());
                     }
                 });
     }
