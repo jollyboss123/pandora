@@ -1,6 +1,7 @@
 package org.jolly.p2p;
 
 import java.net.SocketAddress;
+import java.util.Arrays;
 
 /**
  * RPC holds any arbitrary data that is being sent over the transport
@@ -61,6 +62,6 @@ public class RPC {
 
     @Override
     public String toString() {
-        return "RPC{type=%s, payload=%s, from=%s}".formatted(getType(), getPayload(), getFrom());
+        return "RPC{type=%s, payload=%s, from=%s}".formatted(getType(), Arrays.toString(getPayloadBytes()), getFrom());
     }
 }

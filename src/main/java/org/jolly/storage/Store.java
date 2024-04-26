@@ -38,8 +38,8 @@ public class Store {
         }
     }
 
-    public void write(String key, InputStream in) throws IOException {
-        writeStream(key, in);
+    public int write(String key, InputStream in) throws IOException {
+        return writeStream(key, in);
     }
 
     public void delete(String key) throws IOException {
@@ -62,7 +62,7 @@ public class Store {
         return Files.newInputStream(fullPath);
     }
 
-    void writeStream(String key, InputStream in) throws IOException {
+    int writeStream(String key, InputStream in) throws IOException {
         PathKey pathKey = cfg.getTransformPath().apply(key);
         Path fullPath = prependRoot(pathKey.getFullPath());
 
@@ -78,6 +78,7 @@ public class Store {
         try (OutputStream out = new FileOutputStream(fullPath.toFile())) {
             int n = IOUtils.copy(in, out);
             log.info("written {} bytes to disk: {}", n, fullPath);
+            return n;
         }
     }
 

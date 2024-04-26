@@ -25,6 +25,7 @@ public class Pandora {
             executor.submit(fs1::start);
             executor.submit(fs2::start);
 
+            //TODO: fix this
             Thread.sleep(2000);
             ByteArrayInputStream in = new ByteArrayInputStream("big data file".getBytes());
             fs1.store("privatedata", in);

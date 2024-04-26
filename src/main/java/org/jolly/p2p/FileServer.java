@@ -2,17 +2,20 @@ package org.jolly.p2p;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.jolly.io.IOUtils;
 import org.jolly.io.TeeInputStream;
-import org.jolly.p2p.encoding.DefaultRPCEncoder;
-import org.jolly.p2p.encoding.Encoder;
+import org.jolly.p2p.encoding.*;
 import org.jolly.storage.Store;
 import org.jolly.storage.StoreConfig;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.SocketAddress;
 import java.net.UnknownHostException;
+import java.nio.ByteBuffer;
+import java.util.Base64;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -53,11 +56,23 @@ public class FileServer implements AutoCloseable {
         log.info("storing {}", key);
 
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
-        // teeing input stream to prevent data loss
         TeeInputStream tee = TeeInputStream.of(in, buf);
-        store.write(key, tee);
-        RPC p = RPC.of(key, buf.toByteArray(), null);
-        broadcast(p);
+        int size = store.write(key, tee);
+
+        MessageStoreFile payload = MessageStoreFile.of(key, size);
+        ObjectEncoder<MessageStoreFile> encoder = new ObjectEncoder<>();
+        byte[] encodedPayload = encoder.encode(payload);
+//        broadcast(RPC.of("stor", encodedPayload, null));
+        broadcast(RPC.of("stop", buf.toByteArray(), null));
+
+        //TODO: fix this
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+
+//        broadcast(RPC.of("stop", buf.toByteArray(), null));
     }
 
     private void bootstrapNetwork() {
@@ -93,6 +108,17 @@ public class FileServer implements AutoCloseable {
                 .peek(rpc -> log.info("message received: {}", rpc))
                 .forEach(rpc -> {
                     log.info("do something here with: {}", rpc);
+//                    ObjectDecoder<MessageStoreFile> decoder = new ObjectDecoder<>();
+//                    MessageStoreFile msg = decoder.decode(rpc.getPayloadBytes());
+//                    log.info("store file msg: {}", msg);
+
+                    log.info("here");
+
+                    try {
+                        store.write("stor", new ByteArrayInputStream(rpc.getPayloadBytes()));
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
                 });
     }
 
@@ -101,7 +127,7 @@ public class FileServer implements AutoCloseable {
         for (TCPPeer peer : peers.values()) {
             log.info("sending to peer [{}]", peer);
             RPC newRPC = RPC.of(rpc.getType(), rpc.getPayloadBytes(), peer.getRemoteAddress().toString());
-            executor.submit(() -> peer.send(newRPC, encoder));
+            peer.send(newRPC, encoder);
         }
     }
 
