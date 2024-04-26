@@ -38,6 +38,7 @@ public class TCPTransport implements Transport {
 
             s.close();
         } catch (SocketException e) {
+            log.info(cfg.getPort());
             log.error("stopping accept loop (SocketEx): ", e);
             System.exit(1);
         } catch (IOException e) {

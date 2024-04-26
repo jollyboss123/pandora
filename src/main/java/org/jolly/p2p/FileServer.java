@@ -2,6 +2,8 @@ package org.jolly.p2p;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.Marker;
+import org.apache.logging.log4j.MarkerManager;
 import org.jolly.io.IOUtils;
 import org.jolly.io.TeeInputStream;
 import org.jolly.p2p.encoding.*;
@@ -26,6 +28,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 public class FileServer implements AutoCloseable {
     private static final Logger log = LogManager.getLogger(FileServer.class);
 
+    private final Marker marker;
     private final ExecutorService executor;
     private final ReadWriteLock peerLock;
     private final Map<String, TCPPeer> peers;
@@ -40,6 +43,7 @@ public class FileServer implements AutoCloseable {
         this.executor = Executors.newCachedThreadPool();
         this.peers = new ConcurrentHashMap<>();
         this.peerLock = new ReentrantReadWriteLock();
+        this.marker = MarkerManager.getMarker("file-server-%d".formatted(cfg.getTransport().getConfig().getPort()));
     }
 
     public static FileServer of(FileServerConfig cfg) {
@@ -53,7 +57,7 @@ public class FileServer implements AutoCloseable {
     }
 
     public void store(String key, InputStream in) throws IOException {
-        log.info("storing {}", key);
+        log.info(marker, "storing {}", key);
 
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
         TeeInputStream tee = TeeInputStream.of(in, buf);
@@ -73,27 +77,27 @@ public class FileServer implements AutoCloseable {
     }
 
     private void bootstrapNetwork() {
-        log.info("bootstrapping network");
+        log.info(marker, "bootstrapping network");
         for (int addr : cfg.getBootstrapNodes()) {
             try {
                 cfg.getTransport().dial(addr);
             } catch (UnknownHostException e) {
-                log.warn("dial {} (UnknownHostEx): ", addr,e);
+                log.warn(marker, "dial {} (UnknownHostEx): ", addr,e);
             } catch (IOException e) {
-                log.warn("dial {} (IOEx): ", addr, e);
+                log.warn(marker, "dial {} (IOEx): ", addr, e);
             } catch (InvalidHandshakeException e) {
-                log.warn("dial {} (InvalidHandshakeEx)): ", addr, e);
+                log.warn(marker, "dial {} (InvalidHandshakeEx)): ", addr, e);
             }
         }
     }
 
     private OnPeer onPeer() {
         return peer -> {
-            log.info("updating peers");
+            log.info(marker, "updating peers");
             peerLock.writeLock().lock();
             try {
                 peers.put(peer.getRemoteAddress().toString(), peer);
-                log.info("connected with remote {}", peer.getRemoteAddress());
+                log.info(marker, "connected with remote {}", peer.getRemoteAddress());
             } finally {
                 peerLock.writeLock().unlock();
             }
@@ -102,36 +106,38 @@ public class FileServer implements AutoCloseable {
 
     private void listen() {
         cfg.getTransport().consume().stream()
-                .peek(rpc -> log.info("message received: {}", rpc))
+                .peek(rpc -> log.info(marker, "message received: {}", rpc))
                 .forEach(rpc -> {
-                    log.info("do something here with: {}", rpc);
+                    log.info(marker, "handle message: {}", rpc);
 
                     MessageType type = MessageType.from(rpc.getType());
                     switch (type) {
-                        case STORE -> {
-                            ObjectDecoder<MessageStoreFile> decoder = new ObjectDecoder<>();
-                            MessageStoreFile msg = decoder.decode(rpc.getPayloadBytes());
-                            log.info("store file msg: {}", msg);
-
-                            try {
-                                store.write(msg.getKey(), new ByteArrayInputStream(msg.getData()));
-                            } catch (IOException e) {
-                                //TODO: improve
-                                throw new RuntimeException(e);
-                            }
-                        }
+                        case STORE -> handleStoreFileMessage(rpc);
                         case FETCH -> {
                             //TODO:
                         }
-                        case null, default -> log.warn("unsupported message type: {}", rpc.getType());
+                        case null, default -> log.warn(marker, "unsupported message type: {}", rpc.getType());
                     }
                 });
+    }
+
+    private void handleStoreFileMessage(RPC rpc) {
+        ObjectDecoder<MessageStoreFile> decoder = new ObjectDecoder<>();
+        MessageStoreFile msg = decoder.decode(rpc.getPayloadBytes());
+        log.info(marker, "store file msg: {}", msg);
+
+        try {
+            store.write(msg.getKey(), new ByteArrayInputStream(msg.getData()));
+        } catch (IOException e) {
+            //TODO: improve
+            throw new RuntimeException(e);
+        }
     }
 
     private void broadcast(RPC rpc) {
         Encoder<RPC> encoder = new DefaultRPCEncoder();
         for (TCPPeer peer : peers.values()) {
-            log.info("sending to peer [{}]", peer);
+            log.info(marker, "sending to peer [{}]", peer);
             RPC newRPC = RPC.of(rpc.getType(), rpc.getPayloadBytes(), peer.getRemoteAddress().toString());
             peer.send(newRPC, encoder);
         }

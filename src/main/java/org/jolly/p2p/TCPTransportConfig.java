@@ -46,6 +46,7 @@ public class TCPTransportConfig implements TransportConfig {
         return new TCPTransportConfig(port, handshake, decoder, onPeer);
     }
 
+    @Override
     public int getPort() {
         return port;
     }

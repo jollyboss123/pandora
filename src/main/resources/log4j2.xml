@@ -8,7 +8,7 @@
 >
     <Appenders>
         <Console name="CONSOLE" target="">
-            <PatternLayout pattern="%-5level %date [%thread] %logger: %message %exception%n"/>
+            <PatternLayout pattern="%-5level %date [%thread] %logger %marker: %message %exception%n"/>
         </Console>
     </Appenders>
 
