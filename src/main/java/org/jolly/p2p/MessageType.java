@@ -1,7 +1,6 @@
 package org.jolly.p2p;
 
 import java.util.Arrays;
-import java.util.Optional;
 
 public enum MessageType {
     STORE("stor"), FETCH("fetc");

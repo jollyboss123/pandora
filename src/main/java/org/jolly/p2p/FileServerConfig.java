@@ -3,6 +3,8 @@ package org.jolly.p2p;
 import org.jolly.storage.TransformPath;
 
 import java.util.Objects;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.SynchronousQueue;
 
 public class FileServerConfig {
     private final String storageRoot;

@@ -7,8 +7,7 @@ import org.jolly.p2p.encoding.DefaultRPCDecoder;
 
 import java.io.IOException;
 import java.net.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
 
 public class TCPTransport implements Transport {
     private static final Logger log = LogManager.getLogger(TCPTransport.class);
@@ -16,6 +15,7 @@ public class TCPTransport implements Transport {
     private final ExecutorService executor;
     private final InfiniteBlockingQueue<RPC> msgChan;
     private final TCPTransportConfig cfg;
+    private final Phaser phaser = new Phaser(1);
 
     private TCPTransport(TCPTransportConfig cfg) {
         this.cfg = cfg;
@@ -66,6 +66,10 @@ public class TCPTransport implements Transport {
         return this.msgChan;
     }
 
+    public Phaser getPhaser() {
+        return this.phaser;
+    }
+
     @Override
     public TransportConfig getConfig() {
         return this.cfg;
@@ -94,27 +98,79 @@ public class TCPTransport implements Transport {
     }
 
     private void handleConn(Socket socket) throws IOException, InvalidHandshakeException {
-        SocketWrapper sw = SocketWrapper.of(socket);
-        log.info("tcp client connected on: {}", socket.getPort());
+        try (SocketWrapper sw = SocketWrapper.of(socket);
+             TCPPeer peer = TCPPeer.of(sw);) {
+            log.info("tcp peer created: {}", peer);
 
-        TCPPeer peer = TCPPeer.of(sw);
-        log.info("tcp peer created: {}", peer);
+            cfg.getHandshake().perform(peer);
 
-        cfg.getHandshake().perform(peer);
+            if (cfg.getOnPeer() != null) {
+                cfg.getOnPeer().perform(peer);
+            }
 
-        if (cfg.getOnPeer() != null) {
-            cfg.getOnPeer().perform(peer);
+            RPC msg = peer.receive(cfg.getDecoder());
+            log.info("peer [{}] message received: {}", peer, msg);
+            try {
+                msgChan.put(msg);
+    //            boolean offer = msgChan.offer(msg);
+    //            log.info("offer: {}", offer);
+                if (msg.getType().equals(MessageType.STORE.getName())) {
+                    int i = 0;
+                    while (!msg.getType().equals("done")) {
+                        i++;
+                        log.info("here {}", i);
+                        log.info("sock: {}", sw);
+                        msg = peer.receive(cfg.getDecoder());
+                        log.info("here 2: {}", msg);
+                        msgChan.put(msg);
+    //                    offer = msgChan.offer(msg);
+    //                    log.info("offer: {}", offer);
+                        log.info("done {}", i);
+                    }
+                }
+    //            log.info("producer queue size: {}", msgChan.size());
+                log.info("done done");
+            } catch (InterruptedException ignored) {
+                log.error("msg channel put error for peer: [{}]", peer, ignored);
+            }
         }
-
-        RPC msg = peer.receive(cfg.getDecoder());
-        log.info("peer [{}] message received: {}", peer, msg);
-        try {
-            msgChan.put(msg);
-        } catch (InterruptedException ignored) {
-            log.error("msg channel put error for peer: [{}]", peer, ignored);
-        }
-
-        peer.close();
+//        SocketWrapper sw = SocketWrapper.of(socket);
+//        log.info("tcp client connected on: {}", socket.getPort());
+//
+//        TCPPeer peer = TCPPeer.of(sw);
+//        log.info("tcp peer created: {}", peer);
+//
+//        cfg.getHandshake().perform(peer);
+//
+//        if (cfg.getOnPeer() != null) {
+//            cfg.getOnPeer().perform(peer);
+//        }
+//
+//        RPC msg = peer.receive(cfg.getDecoder());
+//        log.info("peer [{}] message received: {}", peer, msg);
+////        try {
+////            msgChan.put(msg);
+//            boolean offer = msgChan.offer(msg);
+//            log.info("offer: {}", offer);
+//            if (msg.getType().equals(MessageType.STORE.getName())) {
+//                int i = 0;
+//                while (msg != null) {
+//                    i++;
+//                    log.info("here {}", i);
+//                    msg = peer.receive(cfg.getDecoder());
+//                    log.info("here 2: {}", msg);
+////                    msgChan.put(msg);
+//                    offer = msgChan.offer(msg);
+//                    log.info("offer: {}", offer);
+//                    log.info("done {}", i);
+//                }
+//            }
+//            log.info("producer queue size: {}", msgChan.size());
+////        } catch (InterruptedException ignored) {
+////            log.error("msg channel put error for peer: [{}]", peer, ignored);
+////        }
+//
+//        peer.close();
     }
 
     @Override

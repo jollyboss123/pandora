@@ -75,6 +75,6 @@ public class TCPPeer implements Peer {
 
     @Override
     public String toString() {
-        return "Peer{addr=%s}".formatted(getRemoteAddress());
+        return "Peer{addr=%s}".formatted(s != null ? getRemoteAddress() : "unknown");
     }
 }

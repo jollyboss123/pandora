@@ -4,7 +4,6 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.Marker;
 import org.apache.logging.log4j.MarkerManager;
-import org.jolly.io.IOUtils;
 import org.jolly.io.TeeInputStream;
 import org.jolly.p2p.encoding.*;
 import org.jolly.storage.Store;
@@ -14,10 +13,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.SocketAddress;
 import java.net.UnknownHostException;
-import java.nio.ByteBuffer;
-import java.util.Base64;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -28,6 +24,8 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 public class FileServer implements AutoCloseable {
     private static final Logger log = LogManager.getLogger(FileServer.class);
 
+    private static final ObjectDecoder<MessageStoreFile> msfDecoder = new ObjectDecoder<>();
+    private static final ObjectEncoder<MessageStoreFile> msfEncoder = new ObjectEncoder<>();
     private final Marker marker;
     private final ExecutorService executor;
     private final ReadWriteLock peerLock;
@@ -64,16 +62,39 @@ public class FileServer implements AutoCloseable {
         int size = store.write(key, tee);
 
         MessageStoreFile payload = MessageStoreFile.of(key, size, buf.toByteArray());
-        ObjectEncoder<MessageStoreFile> encoder = new ObjectEncoder<>();
-        byte[] encodedPayload = encoder.encode(payload);
+        byte[] encodedPayload = msfEncoder.encode(payload);
         broadcast(RPC.of(MessageType.STORE.getName(), encodedPayload, null));
+//        payload = MessageStoreFile.of(key, 10, buf.toByteArray());
+//        encodedPayload = msfEncoder.encode(payload);
+//        try {
+//            Thread.sleep(3000);
+//        } catch (InterruptedException e) {
+//            throw new RuntimeException(e);
+//        }
+        broadcast(RPC.of("smtg", "random bytes".getBytes(), null));
+        broadcast(RPC.of("give", "random".getBytes(), null));
+        broadcast(RPC.of("done", "nothing".getBytes(), null));
 
         //TODO: fix this
         try {
-            Thread.sleep(1000);
+            Thread.sleep(3000);
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    // check if exist locally
+    // broadcast and get reply from peers in network if file exist there
+    // store locally if file does exist in other nodes
+    public InputStream fetch(String key) throws IOException {
+        if (store.has(key)) {
+            log.info(marker, "file {} stored in local", key);
+            return store.read(key);
+        }
+
+        log.info(marker, "file {} not stored in local, fetching from network", key);
+
+        return null;
     }
 
     private void bootstrapNetwork() {
@@ -105,29 +126,46 @@ public class FileServer implements AutoCloseable {
     }
 
     private void listen() {
-        cfg.getTransport().consume().stream()
+//        for (;;) {
+//            try {
+//                log.info("producer queue size: {}", cfg.getRPCChannel().size());
+//
+//                RPC rpc = cfg.getRPCChannel().take();
+//                log.info(marker, "message received: {}", rpc);
+//            } catch (InterruptedException e) {
+//                throw new RuntimeException(e);
+//            }
+//        }
+        cfg.getRPCChannel().stream()
                 .peek(rpc -> log.info(marker, "message received: {}", rpc))
                 .forEach(rpc -> {
                     log.info(marker, "handle message: {}", rpc);
 
-                    MessageType type = MessageType.from(rpc.getType());
-                    switch (type) {
-                        case STORE -> handleStoreFileMessage(rpc);
-                        case FETCH -> {
-                            //TODO:
-                        }
-                        case null, default -> log.warn(marker, "unsupported message type: {}", rpc.getType());
-                    }
+//                    Peer peer = peers.get("localhost/127.0.0.1:3000");
+//                    log.info(marker, "peer: {} from: {}", peer, rpc.getFrom());
+//                    log.info(marker, "peers: {}", peers);
+//                    RPC next = peer.receive(new DefaultRPCDecoder());
+//                    log.info(marker, "next: {}", next);
+//                    log.info(marker, "phaser: {}", ((TCPTransport) cfg.getTransport()).getPhaser().arrive());
+//
+//                    MessageType type = MessageType.from(rpc.getType());
+//                    switch (type) {
+//                        case STORE -> handleStoreFileMessage(rpc);
+//                        case FETCH -> {
+//                            //TODO:
+//                        }
+//                        case null, default -> log.warn(marker, "unsupported message type: {}", rpc.getType());
+//                    }
                 });
     }
 
     private void handleStoreFileMessage(RPC rpc) {
-        ObjectDecoder<MessageStoreFile> decoder = new ObjectDecoder<>();
-        MessageStoreFile msg = decoder.decode(rpc.getPayloadBytes());
+        MessageStoreFile msg = msfDecoder.decode(rpc.getPayloadBytes());
         log.info(marker, "store file msg: {}", msg);
 
         try {
             store.write(msg.getKey(), new ByteArrayInputStream(msg.getData(), 0, msg.getSize()));
+            ((TCPTransport) cfg.getTransport()).getPhaser().arriveAndDeregister();
         } catch (IOException e) {
             //TODO: improve
             throw new RuntimeException(e);

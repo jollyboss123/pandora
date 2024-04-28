@@ -29,6 +29,9 @@ public class Pandora {
             Thread.sleep(2000);
             ByteArrayInputStream in = new ByteArrayInputStream("big data file".getBytes());
             fs1.store("privatedata", in);
+            Thread.sleep(3000);
+            in = new ByteArrayInputStream("big data file".getBytes());
+            fs1.store("nextprivatedata", in);
         } catch (IOException e) {
             log.error(e);
         } catch (InterruptedException e) {

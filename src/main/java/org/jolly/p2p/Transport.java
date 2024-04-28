@@ -1,6 +1,8 @@
 package org.jolly.p2p;
 
 import java.io.IOException;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.SynchronousQueue;
 
 /**
  * Transport handles the communication between the nodes in the network.
